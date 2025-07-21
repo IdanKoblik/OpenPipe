@@ -18,7 +18,7 @@ A lightweight service that sniffs messages from a RabbitMQ exchange, extracts te
 ### 📏 Configure `config.yml`
 ```yaml
 Web:
-  Host:host
+  Host: host
   Port: port
 
 Rabbit:

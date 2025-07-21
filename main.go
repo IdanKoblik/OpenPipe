@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 )
 
-func initMeterProvider() (*metric.MeterProvider, error) {
+func InitMeterProvider() (*metric.MeterProvider, error) {
 	 exporter, err := prometheus.New()
 	 if err != nil {
 	 	return nil, err
@@ -38,7 +38,7 @@ func main() {
 	 	 }
 	 }()
  
-	 meterProvider, err := initMeterProvider()
+	 meterProvider, err := InitMeterProvider()
 	 if err != nil {
 	 	 log.Fatalf("Failed to initialize meter provider: %v", err)
 	 }

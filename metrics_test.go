@@ -90,19 +90,16 @@ func TestRecordMetrics(t *testing.T) {
 	mm := NewMetricsManager()
 	ctx := context.Background()
 
-	// data missing point_name
 	err := mm.RecordMetrics(ctx, map[string]interface{}{"foo": 1})
 	if err == nil {
 		t.Error("Expected error when point_name is missing")
 	}
 
-	// data with invalid point_name type
 	err = mm.RecordMetrics(ctx, map[string]interface{}{"point_name": 123})
 	if err == nil {
 		t.Error("Expected error when point_name is not string")
 	}
 
-	// valid data
 	data := map[string]interface{}{
 		"point_name": "test_metric",
 		"field1":     42,
@@ -114,7 +111,6 @@ func TestRecordMetrics(t *testing.T) {
 		t.Errorf("RecordMetrics returned error: %v", err)
 	}
 
-	// Calling again to test instrument reuse
 	err = mm.RecordMetrics(ctx, data)
 	if err != nil {
 		t.Errorf("RecordMetrics returned error on reuse: %v", err)

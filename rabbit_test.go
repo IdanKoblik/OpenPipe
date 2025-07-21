@@ -49,7 +49,6 @@ func TestConsumeMessages_ChannelError(t *testing.T) {
 	cfg.Rabbit.Port = 5672
 	cfg.Rabbit.Channel = "test-exchange"
 
-	// Dial with correct params to get a connection, then forcibly close it before channel creation to cause error.
 	conn, err := amqp.Dial(fmt.Sprintf("amqp://%s:%s@%s:%d/",
 		cfg.Rabbit.Username,
 		cfg.Rabbit.Password,
@@ -59,9 +58,8 @@ func TestConsumeMessages_ChannelError(t *testing.T) {
 	if err != nil {
 		t.Skipf("Skipping test because connection failed: %v", err)
 	}
-	conn.Close() // close immediately to cause Channel() error
+	conn.Close()
 
-	// This is a bit hacky: override the ConsumeMessages func to use this closed conn
 	ConsumeMessagesClosedConn := func(cfg *Config) (<-chan amqp.Delivery, error) {
 		ch, err := conn.Channel()
 		if err != nil {
@@ -105,7 +103,7 @@ func TestConsumeMessages_ExchangeDeclareError(t *testing.T) {
 
 	err = ch.ExchangeDeclare(
 		cfg.Rabbit.Channel,
-		"invalid-type", // Invalid exchange type to cause error
+		"invalid-type",
 		false,
 		false,
 		false,
@@ -118,8 +116,6 @@ func TestConsumeMessages_ExchangeDeclareError(t *testing.T) {
 }
 
 func TestConsumeMessages_QueueDeclareError(t *testing.T) {
-	// QueueDeclare errors are tricky to force.
-	// We can try to declare a queue with invalid arguments or empty name and non-exclusive.
 	cfg := &Config{}
 	cfg.Rabbit.Username = "guest"
 	cfg.Rabbit.Password = "guest"
@@ -143,12 +139,11 @@ func TestConsumeMessages_QueueDeclareError(t *testing.T) {
 	defer conn.Close()
 	defer ch.Close()
 
-	// Invalid QueueDeclare - empty name but not exclusive or autoDelete can cause error in some brokers
 	_, err = ch.QueueDeclare(
 		"",
 		false,
 		false,
-		false, // not exclusive
+		false,
 		false,
 		nil,
 	)
@@ -181,7 +176,6 @@ func TestConsumeMessages_QueueBindError(t *testing.T) {
 	defer conn.Close()
 	defer ch.Close()
 
-	// Try to bind to a non-existent queue to cause error
 	err = ch.QueueBind(
 		"non-existent-queue",
 		"",
@@ -218,7 +212,6 @@ func TestConsumeMessages_ConsumeError(t *testing.T) {
 	defer conn.Close()
 	defer ch.Close()
 
-	// Try to consume from a non-existent queue to cause error
 	_, err = ch.Consume(
 		"non-existent-queue",
 		"",

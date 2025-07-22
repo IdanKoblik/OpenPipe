@@ -6,7 +6,7 @@ RUN adduser -D -u 10001 container
 
 WORKDIR /app/
 
-COPY . /app/
+COPY openPipe /app/
 
 USER container
 WORKDIR /home/container/

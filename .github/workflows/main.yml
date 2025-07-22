@@ -39,6 +39,7 @@ jobs:
 
   run_secuirty:
     needs: run_tests
+    uses: ./.github/workflows/callable.security.yml
 
   publish_docker:
     if: github.event_name == 'workflow_dispatch'

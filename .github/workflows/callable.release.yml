@@ -1,0 +1,30 @@
+name: Github release 
+
+on:
+  workflow_call:
+    inputs:
+      VERSION:
+        description: 'Version name'
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.5
+
+      - name: build
+        run: make build
+
+      - name: Upload
+        uses: IdanKoblik/Changelog@prod
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          version: ${{ inputs.VERSION }}
+          assets: './openPipe'

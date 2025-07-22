@@ -1,0 +1,54 @@
+name: Main workflow
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 6-cicd # TODO REMOVE
+  push:
+    branches:
+      - main
+      - 6-cicd #TODO REMOVE
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Version name'
+        required: true
+        type: string
+
+permissions:
+  pull-requests: write
+  contents: write
+  repository-projects: write
+  packages: write
+  pages: write
+  id-token: write
+
+jobs:
+  checkout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+  run_tests:
+    needs: checkout
+    uses: ./.github/workflows/callable.test.yml
+
+  run_secuirty:
+    needs: run_tests
+
+  publish_docker:
+    if: github.event_name == 'workflow_dispatch'
+    needs: run_secuirty
+    uses: ./.github/workflows/callable.docker.yml
+
+  publish_github_release:
+    if: github.event_name == 'workflow_dispatch'
+    needs: run_secuirty
+    uses: ./.github/workflows/callable.docker.yml
+    with:
+      VERSION: ${{ github.event.inputs.name }}
+

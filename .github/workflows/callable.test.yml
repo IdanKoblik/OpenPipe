@@ -27,7 +27,7 @@ jobs:
         uses: docker/setup-compose-action@v1.2.0
       
       - name: Run docker compose
-        uses: docker compose --profile rabbit up -d
+        run: docker compose --profile rabbit up -d
 
       - name: Run tests
         run: make test

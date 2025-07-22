@@ -49,7 +49,7 @@ jobs:
   publish_github_release:
     if: github.event_name == 'workflow_dispatch'
     needs: run_secuirty
-    uses: ./.github/workflows/callable.docker.yml
+    uses: ./.github/workflows/callable.release.yml
     with:
       VERSION: ${{ github.event.inputs.name || "workflow" }}
 

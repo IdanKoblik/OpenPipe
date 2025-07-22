@@ -23,10 +23,11 @@ jobs:
       - name: Install dependencies
         run: go mod tidy
 
+      - name: Download docker compose
+        uses: docker/setup-compose-action@v1.2.0
+      
       - name: Run docker compose
-        uses: hoverkraft-tech/compose-action@v2.3.0
-        with:
-          compose-flags: "--profile rabbit"
+        uses: docker compose --profile rabbit up -d
 
       - name: Run tests
         run: make test

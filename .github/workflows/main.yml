@@ -51,5 +51,5 @@ jobs:
     needs: run_secuirty
     uses: ./.github/workflows/callable.release.yml
     with:
-      VERSION: ${{ github.event.inputs.name || "workflow" }}
+      VERSION: ${{ github.event.inputs.name && github.event.inputs.name != '' ? github.event.inputs.name : 'workflow' }}
 

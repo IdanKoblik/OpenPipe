@@ -1,0 +1,53 @@
+name: Main workflow
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version name'
+        required: true
+        type: string
+
+permissions:
+  pull-requests: write
+  contents: write
+  repository-projects: write
+  packages: write
+  pages: write
+  id-token: write
+
+jobs:
+  checkout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+  run_tests:
+    needs: checkout
+    uses: ./.github/workflows/callable.test.yml
+
+  run_secuirty:
+    needs: run_tests
+    uses: ./.github/workflows/callable.security.yml
+
+  publish_docker:
+    if: github.event_name == 'workflow_dispatch'
+    needs: run_secuirty
+    uses: ./.github/workflows/callable.docker.yml
+
+  publish_github_release:
+    if: github.event_name == 'workflow_dispatch'
+    needs: run_secuirty
+    uses: ./.github/workflows/callable.release.yml
+    with:
+      VERSION: ${{ github.event.inputs.version }}
+

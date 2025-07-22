@@ -1,0 +1,63 @@
+name: Run tests
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  run_tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.5
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Download docker compose
+        uses: docker/setup-compose-action@v1.2.0
+
+      - name: Create Prometheus config file
+        run: |
+          DOCKER_HOST_IP=$(ip route | awk '/default/ { print $3 }')
+          echo "Using Docker host IP: $DOCKER_HOST_IP"
+
+          cat <<EOF > prometheus.yml
+          global:
+            scrape_interval: 5s
+
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['$DOCKER_HOST_IP:2222']
+          EOF
+
+      - name: Run docker compose
+        run: docker compose --profile rabbit up -d
+
+      - name: Run tests
+        run: make test
+
+      - name: Coverage
+        run: make coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+
+      - name: Upload coverage to Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: coverage.out
+

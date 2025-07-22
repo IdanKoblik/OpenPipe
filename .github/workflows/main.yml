@@ -4,11 +4,9 @@ on:
   pull_request:
     branches:
       - main
-      - 6-cicd # TODO REMOVE
   push:
     branches:
       - main
-      - 6-cicd #TODO REMOVE
   workflow_dispatch:
     inputs:
       version:

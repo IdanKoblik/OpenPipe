@@ -24,7 +24,7 @@ jobs:
         run: go mod tidy
 
       - name: Run docker compose
-        uses: hoverkraft-tech/compose-action@v0.0.0
+        uses: hoverkraft-tech/compose-action@v2.3.0
         with:
           compose-flags: "--profile rabbit"
 

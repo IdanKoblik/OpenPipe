@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
@@ -23,7 +24,20 @@ func InitMeterProvider() (*metric.MeterProvider, error) {
 }
 
 func main() {
-	 cfg, err := ReadConfig("config.yml")
+	 foundDocker := false
+    for _, arg := range os.Args[1:] { 
+		 if arg == "--docker" {
+            foundDocker = true
+            break
+        }
+    }
+
+	 configFile := "config.yml"
+	 if foundDocker {
+		configFile = "/home/container/config.yml" 
+	 }
+
+	 cfg, err := ReadConfig(configFile)
 	 if err != nil {
 	 	 log.Fatalf("Cannot parse config file: %v", err)
 	 }

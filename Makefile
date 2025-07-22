@@ -27,5 +27,6 @@ clean:
 
 build:
 	@echo "Building binary $(BINARY_NAME)..."
-	@go build -o $(BINARY_NAME) main.go
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o $(BINARY_NAME) .
 	@echo "Build complete."
+

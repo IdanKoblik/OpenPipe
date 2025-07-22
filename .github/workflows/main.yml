@@ -51,5 +51,5 @@ jobs:
     needs: run_secuirty
     uses: ./.github/workflows/callable.docker.yml
     with:
-      VERSION: ${{ github.event.inputs.name }}
+      VERSION: ${{ github.event.inputs.name || "workflow" }}
 

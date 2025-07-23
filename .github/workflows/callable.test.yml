@@ -43,7 +43,21 @@ jobs:
 
       - name: Run docker compose
         run: docker compose --profile rabbit up -d
+      
+      - name: Wait for RabbitMQ to be ready
+        run: |
+          echo "Waiting for RabbitMQ..."
+          for i in {1..10}; do
+            docker exec rabbitmq rabbitmq-diagnostics -q ping && break
+            echo "Retrying..."
+            sleep 3
+          done
 
+          # Final check
+          docker exec rabbitmq rabbitmq-diagnostics -q ping || {
+            echo "RabbitMQ did not start in time"; exit 1;
+          }
+        
       - name: Run tests
         run: make test
 

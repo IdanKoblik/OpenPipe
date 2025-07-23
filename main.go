@@ -42,9 +42,9 @@ func main() {
 	 }
  
 	 http.Handle("/metrics", promhttp.Handler())
-	 //http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-	//		HealthHandler(w, r, cfg)
-	 //})
+	 http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		HealthHandler(w, r, cfg)
+	 })
 
 	 addr := CreateAddr(cfg)
 	 log.Printf("Serving metrics at http://%s/metrics\n", addr)

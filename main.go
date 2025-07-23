@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"context"
 	"fmt"
 	"log"
@@ -23,14 +24,12 @@ func InitMeterProvider() (*metric.MeterProvider, error) {
 	 return provider, nil
 }
 
+func CreateAddr(cfg *Config) string {
+	return fmt.Sprintf("%s:%d", cfg.Web.Host, cfg.Web.Port)
+}
+
 func main() {
-	 foundDocker := false
-    for _, arg := range os.Args[1:] { 
-		 if arg == "--docker" {
-            foundDocker = true
-            break
-        }
-    }
+	 foundDocker := slices.Contains(os.Args[1:], "--docker")
 
 	 configFile := "config.yml"
 	 if foundDocker {
@@ -43,11 +42,15 @@ func main() {
 	 }
  
 	 http.Handle("/metrics", promhttp.Handler())
-	 log.Printf("Serving metrics at http://%s:%d/metrics\n", cfg.Web.Host, cfg.Web.Port)
-	 port := fmt.Sprintf(":%d", cfg.Web.Port)
+	 http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		HealthHandler(w, r, cfg)
+	 })
+
+	 addr := CreateAddr(cfg)
+	 log.Printf("Serving metrics at http://%s/metrics\n", addr)
  
 	 go func() {
-	 	 if err := http.ListenAndServe(port, nil); err != nil {
+	 	 if err := http.ListenAndServe(addr, nil); err != nil {
 	 	 	 log.Fatalf("Failed to start HTTP server: %v", err)
 	 	 }
 	 }()
@@ -74,7 +77,7 @@ func main() {
 	 for msg := range msgs {
 	 	 log.Printf("Received: %s", msg.Body)
 	 	 msg.Ack(false)
-		processMessage(context.Background(), mm, msg.Body)
+		 processMessage(context.Background(), mm, msg.Body)
 	 }
 }
 

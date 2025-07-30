@@ -19,7 +19,7 @@ services:
       - grafana-storage:/var/lib/grafana
 
   rabbitmq:
-    image: rabbitmq:4
+    image: rabbitmq:3-management
     container_name: rabbitmq
     profiles: ["rabbit"]
     ports:

@@ -5,14 +5,17 @@ import (
 	"github.com/streadway/amqp"
 )
 
-func ConsumeMessages(cfg *Config) (<-chan amqp.Delivery, error) {
-	conn, err := amqp.Dial(fmt.Sprintf("amqp://%s:%s@%s:%d/",
+func CreateConnStr(cfg *Config) string {
+	return fmt.Sprintf("amqp://%s:%s@%s:%d/",
 		cfg.Rabbit.Username,
 		cfg.Rabbit.Password,
 		cfg.Rabbit.Host,
 		cfg.Rabbit.Port,
-	))
+	)
+}
 
+func ConsumeMessages(cfg *Config) (<-chan amqp.Delivery, error) {
+	conn, err := amqp.Dial(CreateConnStr(cfg))
 	if err != nil {
 		return nil, err
 	}

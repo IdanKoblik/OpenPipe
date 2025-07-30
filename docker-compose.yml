@@ -19,12 +19,17 @@ services:
       - grafana-storage:/var/lib/grafana
 
   rabbitmq:
-    image: rabbitmq:4
+    image: rabbitmq:3-management
     container_name: rabbitmq
     profiles: ["rabbit"]
     ports:
       - "5672:5672"
       - "15672:15672"
+    options: >-
+      --health-cmd "rabbitmqctl status"
+      --health-interval 10s
+      --health-timeout 5s
+      --health-retries 5
 
 
 volumes:

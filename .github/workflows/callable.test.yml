@@ -10,6 +10,15 @@ jobs:
   run_tests:
     runs-on: ubuntu-latest
 
+    services:
+      rabbitmq:
+        image: rabbitmq:3.8
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        ports:
+          - 5672
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,22 +51,8 @@ jobs:
           EOF
 
       - name: Run docker compose
-        run: docker compose --profile rabbit up -d
-      
-      - name: Wait for RabbitMQ to be ready
-        run: |
-          echo "Waiting for RabbitMQ..."
-          for i in {1..10}; do
-            docker exec rabbitmq rabbitmq-diagnostics -q ping && break
-            echo "Retrying..."
-            sleep 3
-          done
+        run: docker compose up -d 
 
-          # Final check
-          docker exec rabbitmq rabbitmq-diagnostics -q ping || {
-            echo "RabbitMQ did not start in time"; exit 1;
-          }
-        
       - name: Run tests
         run: make test
 

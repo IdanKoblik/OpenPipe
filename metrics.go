@@ -6,18 +6,12 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
-	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
 
-type Point struct {
-    Fields map[string]float64 `json:"fields"`
-    Name   string             `json:"name"`
-    Time   time.Time          `json:"time"`
-}
 
 type MetricsManager struct {
 	meter metric.Meter
@@ -29,6 +23,22 @@ func NewMetricsManager() *MetricsManager {
 	return &MetricsManager{meter: meter}
 }
 
+func Flatten(data map[string]interface{}, prefix string, result map[string]interface{}) {
+	for k, v := range data {
+		fullKey := k
+		if prefix != "" {
+			fullKey = prefix + "." + k
+		}
+
+		switch val := v.(type) {
+		case map[string]interface{}:
+			Flatten(val, fullKey, result)
+		default:
+			result[fullKey] = val
+		}
+	}
+}
+
 func ParseMessage(data []byte) (map[string]interface{}, error) {
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -36,29 +46,7 @@ func ParseMessage(data []byte) (map[string]interface{}, error) {
 	}
 
 	result := make(map[string]interface{})
-
-	pointRaw, ok := raw["point"].(map[string]interface{})
-	if ok {
-		if fields, ok := pointRaw["fields"].(map[string]interface{}); ok {
-			for k, v := range fields {
-				result[k] = v
-			}
-		}
-		if name, ok := pointRaw["name"]; ok {
-			result["point_name"] = name
-		}
-		if t, ok := pointRaw["time"]; ok {
-			result["point_time"] = t
-		}
-	}
-
-	for k, v := range raw {
-		if k == "point" {
-			continue
-		}
-		result[k] = v
-	}
-
+	Flatten(raw, "", result)
 	return result, nil
 }
 

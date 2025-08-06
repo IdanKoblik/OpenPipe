@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"reflect"
 
 	"go.opentelemetry.io/otel"
 )
@@ -34,20 +35,16 @@ func TestParseMessage(t *testing.T) {
 		t.Fatalf("ParseMessage returned error: %v", err)
 	}
 
-	if msg["cpu"] != 42.5 {
-		t.Errorf("Expected cpu 42.5, got %v", msg["cpu"])
+	expected := map[string]interface{}{
+		"point.fields.cpu":  42.5,
+		"point.fields.mem":  float64(128), // JSON numbers are unmarshaled as float64
+		"point.name":        "system",
+		"point.time":        "2025-07-21T10:00:00Z",
+		"extra":             "value",
 	}
 
-	if msg["point_name"] != "system" {
-		t.Errorf("Expected point_name 'system', got %v", msg["point_name"])
-	}
-
-	if _, ok := msg["point_time"]; !ok {
-		t.Errorf("Expected point_time present")
-	}
-
-	if msg["extra"] != "value" {
-		t.Errorf("Expected extra value, got %v", msg["extra"])
+	if !reflect.DeepEqual(msg, expected) {
+		t.Errorf("Expected:\n%v\nGot:\n%v", expected, msg)
 	}
 }
 

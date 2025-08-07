@@ -1,119 +1,206 @@
-package main
+package main 
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
-	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
 
+type rawMetric map[string]interface{}
 
-type MetricsManager struct {
-	meter metric.Meter
-	instruments sync.Map
+type metricSample struct {
+	labels map[string]string
+	value  float64
 }
 
-func NewMetricsManager() *MetricsManager {
-	meter := otel.Meter("server_metrics")
-	return &MetricsManager{meter: meter}
+type MetricsStore struct {
+	mu      sync.RWMutex
+	metrics map[string][]metricSample
 }
 
-func Flatten(data map[string]interface{}, prefix string, result map[string]interface{}) {
-	for k, v := range data {
-		fullKey := k
-		if prefix != "" {
-			fullKey = prefix + "." + k
-		}
-
-		switch val := v.(type) {
-		case map[string]interface{}:
-			Flatten(val, fullKey, result)
-		default:
-			result[fullKey] = val
-		}
+func NewMetricsStore() *MetricsStore {
+	return &MetricsStore{
+		metrics: make(map[string][]metricSample),
 	}
 }
 
-func ParseMessage(data []byte) (map[string]interface{}, error) {
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
-
-	result := make(map[string]interface{})
-	Flatten(raw, "", result)
-	return result, nil
+func (ms *MetricsStore) UpdateMetrics(samples []metricSample, metricName string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.metrics[metricName] = samples
 }
 
-func (m *MetricsManager) RecordMetrics(ctx context.Context, data map[string]interface{}) error {
-	for key, rawVal := range data {
-		 if val, ok := toFloat64(rawVal); ok {
-			instrumentIface, ok := m.instruments.Load(key)
-			var gauge metric.Float64ObservableGauge
-			var err error
+func (ms *MetricsStore) GetMetrics() map[string][]metricSample {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	cpy := make(map[string][]metricSample, len(ms.metrics))
+	for k, v := range ms.metrics {
+		cpy[k] = v
+	}
+	return cpy
+}
 
+var store = NewMetricsStore()
+
+func RecordMetrics(ctx context.Context, meter metric.Meter, data []byte) error {
+	var parsed interface{}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return fmt.Errorf("json unmarshal: %w", err)
+	}
+
+	var rawMetrics []rawMetric
+	switch v := parsed.(type) {
+	case []interface{}:
+		for i, e := range v {
+			obj, ok := e.(map[string]interface{})
 			if !ok {
-				gauge, err = m.meter.Float64ObservableGauge(key, metric.WithDescription(fmt.Sprintf("Gauge for %s", key)),)
-				if err != nil {
-					return err
-				}
-
-				m.instruments.Store(key, gauge)
-			} else {
-				gauge = instrumentIface.(metric.Float64ObservableGauge)
+				return fmt.Errorf("element %d is not an object", i)
 			}
+			rawMetrics = append(rawMetrics, obj)
+		}
+	case map[string]interface{}:
+		rawMetrics = append(rawMetrics, v)
+	default:
+		return errors.New("json must be object or array of objects")
+	}
 
-			_, err = m.meter.RegisterCallback(
-             func(ctx context.Context, observer metric.Observer) error {
-					 observer.ObserveFloat64(gauge, val)
-					 return nil
-				 }, gauge,
-			)	
+	batchByName := make(map[string][]metricSample)
 
+	for i, rm := range rawMetrics {
+		metricNameRaw, ok := rm["metricName"]
+		if !ok {
+			return fmt.Errorf("metricName missing in object %d", i)
+		}
+		metricName, ok := metricNameRaw.(string)
+		if !ok || metricName == "" {
+			return fmt.Errorf("metricName must be non-empty string in object %d", i)
+		}
+
+		valueRaw, ok := rm["value"]
+		if !ok {
+			return fmt.Errorf("value missing in object %d", i)
+		}
+
+		labels := make(map[string]string)
+		for k, v := range rm {
+			if k == "metricName" || k == "value" {
+				continue
+			}
+			labels[k] = stringifyLabelValue(v)
+		}
+
+		var val float64
+		switch vv := valueRaw.(type) {
+		case float64:
+			val = vv
+		case int64:
+			val = float64(vv)
+		case int:
+			val = float64(vv)
+		case json.Number:
+			fv, err := vv.Float64()
 			if err != nil {
-				return err
-			}
-		} else {
-			switch v := rawVal.(type) {
-			case string:
-				fmt.Printf("Attribute: %s = %s\n", key, v)
-			case []interface{}:
-				strSlice := make([]string, 0, len(v))
-				for _, item := range v {
-					if s, ok := item.(string); ok {
-						strSlice = append(strSlice, s)
-					}
+				iv, err2 := vv.Int64()
+				if err2 != nil {
+					return fmt.Errorf("invalid json.Number in object %d: %v", i, vv)
 				}
-				fmt.Printf("List attribute: %s = %v\n", key, strSlice)
-			default:
-				fmt.Printf("Ignoring non-metric field: %s (%T)\n", key, val)
+				val = float64(iv)
+			} else {
+				val = fv
 			}
+		case string:
+			labels["value"] = vv
+			val = 1
+		case []interface{}:
+			var parts []string
+			for _, x := range vv {
+				parts = append(parts, stringifyLabelValue(x))
+			}
+			labels["value"] = strings.Join(parts, ",")
+			val = 1
+		default:
+			return fmt.Errorf("unsupported value type %T in object %d", vv, i)
+		}
+
+		batchByName[metricName] = append(batchByName[metricName], metricSample{
+			labels: labels,
+			value:  val,
+		})
+	}
+
+	for metricName, samples := range batchByName {
+		store.UpdateMetrics(samples, metricName)
+
+		gauge, err := meter.Float64ObservableGauge(metricName)
+		if err != nil {
+			return fmt.Errorf("failed to create gauge %s: %w", metricName, err)
+		}
+
+		_, err = meter.RegisterCallback(
+			func(ctx context.Context, observer metric.Observer) error {
+				metrics := store.GetMetrics()
+				samplesForMetric, ok := metrics[metricName]
+				if !ok {
+					return nil
+				}
+				for _, sample := range samplesForMetric {
+					attrs := labelsToAttributes(sample.labels)
+					opts := []metric.ObserveOption{metric.WithAttributes(attrs...)}
+					observer.ObserveFloat64(gauge, sample.value, opts...)
+				}
+				return nil
+			},
+			gauge,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to register callback for %s: %w", metricName, err)
 		}
 	}
 
 	return nil
 }
 
-func toFloat64(val interface{}) (float64, bool) {
-	switch v := val.(type) {
-	case float64:
-		return v, true
-	case int:
-		return float64(v), true
-	case int64:
-		return float64(v), true
-	case json.Number:
-		f, err := v.Float64()
-		return f, err == nil
+func stringifyLabelValue(v interface{}) string {
+	switch vv := v.(type) {
 	case string:
-		f, err := strconv.ParseFloat(v, 64)
-		return f, err == nil
+		return vv
+	case float64:
+		return strconv.FormatFloat(vv, 'f', -1, 64)
+	case int:
+		return strconv.Itoa(vv)
+	case int64:
+		return strconv.FormatInt(vv, 10)
+	case json.Number:
+		return vv.String()
+	case []interface{}:
+		var parts []string
+		for _, x := range vv {
+			parts = append(parts, stringifyLabelValue(x))
+		}
+		return strings.Join(parts, ",")
 	default:
-		return 0, false
+		return fmt.Sprintf("%v", vv)
 	}
+}
+
+func labelsToAttributes(labels map[string]string) []attribute.KeyValue {
+	attrs := make([]attribute.KeyValue, 0, len(labels))
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		attrs = append(attrs, attribute.String(k, labels[k]))
+	}
+	return attrs
 }
 

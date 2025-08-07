@@ -64,27 +64,19 @@ func main() {
 	 }()
 	 otel.SetMeterProvider(meterProvider)
 
-	 mm := NewMetricsManager()
 	 msgs, err := ConsumeMessages(cfg)
 	 if err != nil {
 		 log.Fatalf("Failed to start consuming messages: %s", err)
 	 }
- 
+
+	 meter := otel.Meter("server_metrics")
 	 log.Println("Waiting for messages...")
 	 for msg := range msgs {
 	 	 log.Printf("Received: %s", msg.Body)
 	 	 msg.Ack(false)
-		processMessage(context.Background(), mm, msg.Body)
+		 if err := RecordMetrics(context.Background(), meter, msg.Body); err != nil {
+			fmt.Println("Error recording metrics:", err)
+		 }
 	 }
 }
 
-func processMessage(ctx context.Context, mm *MetricsManager, msgBody []byte) {
-	msg, err := ParseMessage(msgBody)
-	if err != nil {
-		log.Printf("Failed to parse message: %v", err)
-		return
-	}
-	if err := mm.RecordMetrics(ctx, msg); err != nil {
-		log.Printf("Failed to record metrics: %v", err)
-	}
-}

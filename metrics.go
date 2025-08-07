@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
 
@@ -51,59 +50,49 @@ func ParseMessage(data []byte) (map[string]interface{}, error) {
 }
 
 func (m *MetricsManager) RecordMetrics(ctx context.Context, data map[string]interface{}) error {
-	metricNameRaw, ok := data["point_name"]
-	if !ok {
-		return fmt.Errorf("missing 'point_name'")
-	}
-	metricName, ok := metricNameRaw.(string)
-	if !ok {
-		return fmt.Errorf("'point_name' is not a string")
-	}
+	for key, rawVal := range data {
+		 if val, ok := toFloat64(rawVal); ok {
+			instrumentIface, ok := m.instruments.Load(key)
+			var gauge metric.Float64ObservableGauge
+			var err error
 
-	instrumentIface, ok := m.instruments.Load(metricName)
-	var gauge metric.Float64ObservableGauge
-	var err error
+			if !ok {
+				gauge, err = m.meter.Float64ObservableGauge(key, metric.WithDescription(fmt.Sprintf("Gauge for %s", key)),)
+				if err != nil {
+					return err
+				}
 
-	if !ok {
-		gauge, err = m.meter.Float64ObservableGauge(
-			metricName,
-			metric.WithDescription(fmt.Sprintf("Gauge for %s", metricName)),
-		)
-		if err != nil {
-			return err
-		}
-		m.instruments.Store(metricName, gauge)
-	} else {
-		gauge = instrumentIface.(metric.Float64ObservableGauge)
-	}
-
-	values := make(map[string]float64)
-	attrs := make([]attribute.KeyValue, 0)
-
-	for k, v := range data {
-		if k == "point_name" || k == "point_time" {
-			continue
-		}
-		if f, ok := toFloat64(v); ok {
-			values[k] = f
-		} else if s, ok := v.(string); ok {
-			attrs = append(attrs, attribute.String(k, s))
-		}
-	}
-
-	_, err = m.meter.RegisterCallback(
-		func(ctx context.Context, observer metric.Observer) error {
-			for k, val := range values {
-				allAttrs := append(attrs, attribute.String("field", k))
-				observer.ObserveFloat64(gauge, val, metric.WithAttributeSet(attribute.NewSet(allAttrs...)))
+				m.instruments.Store(key, gauge)
+			} else {
+				gauge = instrumentIface.(metric.Float64ObservableGauge)
 			}
-			return nil
-		},
-		gauge,
-	)
 
-	if err != nil {
-		return err
+			_, err = m.meter.RegisterCallback(
+             func(ctx context.Context, observer metric.Observer) error {
+					 observer.ObserveFloat64(gauge, val)
+					 return nil
+				 }, gauge,
+			)	
+
+			if err != nil {
+				return err
+			}
+		} else {
+			switch v := rawVal.(type) {
+			case string:
+				fmt.Printf("Attribute: %s = %s\n", key, v)
+			case []interface{}:
+				strSlice := make([]string, 0, len(v))
+				for _, item := range v {
+					if s, ok := item.(string); ok {
+						strSlice = append(strSlice, s)
+					}
+				}
+				fmt.Printf("List attribute: %s = %v\n", key, strSlice)
+			default:
+				fmt.Printf("Ignoring non-metric field: %s (%T)\n", key, val)
+			}
+		}
 	}
 
 	return nil

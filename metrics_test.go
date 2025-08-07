@@ -87,30 +87,38 @@ func TestRecordMetrics(t *testing.T) {
 	mm := NewMetricsManager()
 	ctx := context.Background()
 
-	err := mm.RecordMetrics(ctx, map[string]interface{}{"foo": 1})
-	if err == nil {
-		t.Error("Expected error when point_name is missing")
+	// Case 1: Metric with float values only
+	data1 := map[string]interface{}{
+		"cpu.usage": 42.5,
+		"mem.usage": 128,
 	}
 
-	err = mm.RecordMetrics(ctx, map[string]interface{}{"point_name": 123})
-	if err == nil {
-		t.Error("Expected error when point_name is not string")
-	}
-
-	data := map[string]interface{}{
-		"point_name": "test_metric",
-		"field1":     42,
-		"tag1":       "tagvalue",
-	}
-
-	err = mm.RecordMetrics(ctx, data)
+	err := mm.RecordMetrics(ctx, data1)
 	if err != nil {
-		t.Errorf("RecordMetrics returned error: %v", err)
+		t.Errorf("RecordMetrics returned error for valid float metrics: %v", err)
 	}
 
-	err = mm.RecordMetrics(ctx, data)
+	// Case 2: Mix of float and non-float values
+	data2 := map[string]interface{}{
+		"cpu.usage": 75,
+		"players":   []interface{}{"alice", "bob"},
+		"status":    "active",
+	}
+
+	err = mm.RecordMetrics(ctx, data2)
 	if err != nil {
-		t.Errorf("RecordMetrics returned error on reuse: %v", err)
+		t.Errorf("RecordMetrics returned error for mixed-type input: %v", err)
+	}
+
+	// Case 3: Only non-float values (should not error, just skip them)
+	data3 := map[string]interface{}{
+		"players": []interface{}{"charlie", "dana"},
+		"status":  "idle",
+	}
+
+	err = mm.RecordMetrics(ctx, data3)
+	if err != nil {
+		t.Errorf("RecordMetrics returned error for non-float input: %v", err)
 	}
 }
 
